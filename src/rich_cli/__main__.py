@@ -73,30 +73,27 @@ def read_resource(path: str, lexer: Optional[str]) -> Tuple[str, Optional[str]]:
         on_error("missing path or URL")
 
     if path.startswith(("http://", "https://")):
-        import requests
+        from .fetch import FetchError, SecureFetcher
 
-        response = requests.get(path)
-
-        text = response.text
         try:
-            mime_type: str = response.headers["Content-Type"]
-            if ";" in mime_type:
-                mime_type = mime_type.split(";", 1)[0]
-        except KeyError:
-            pass
-        else:
-            if not lexer:
-                _, dot, ext = path.rpartition(".")
-                if dot and ext:
-                    ext = ext.lower()
-                    lexer = COMMON_LEXERS.get(ext, None)
-                if lexer is None:
-                    from pygments.lexers import get_lexer_for_mimetype
+            fetched = SecureFetcher().fetch(path)
+        except FetchError as error:
+            on_error(f"unable to fetch {escape(path)}", error)
 
-                    try:
-                        lexer = get_lexer_for_mimetype(mime_type).name
-                    except Exception:
-                        pass
+        text = fetched.text
+        mime_type = fetched.content_type
+        if mime_type and not lexer:
+            _, dot, ext = path.rpartition(".")
+            if dot and ext:
+                ext = ext.lower()
+                lexer = COMMON_LEXERS.get(ext, None)
+            if lexer is None:
+                from pygments.lexers import get_lexer_for_mimetype
+
+                try:
+                    lexer = get_lexer_for_mimetype(mime_type).name
+                except Exception:
+                    pass
         return (text, lexer)
     try:
         if path == "-":
